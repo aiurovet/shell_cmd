@@ -12,6 +12,7 @@ import 'package:test/test.dart';
 ///
 void main() {
   final isWindows = Platform.isWindows;
+  final eol = (isWindows ? '\r\n' : '\n');
 
   group('extractExecutable -', () {
     test('empty', () {
@@ -48,8 +49,9 @@ void main() {
   group('run -', () {
     test('echo', () async {
       final e = String.fromCharCode($escape);
+      final q = (isWindows ? '"' : '');
       final r = await ShellCmd.run('echo Abc$e def', runInShell: isWindows);
-      expect(r.stdout.toString(), 'Abc def\n');
+      expect(r.stdout.toString(), '${q}Abc def$q$eol');
     });
     test('dart --version', () async {
       final r = await ShellCmd.run(r'dart --version');
@@ -59,13 +61,13 @@ void main() {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
       final cmd = (isWindows ? 'echo "%$key%"' : 'echo "\${$key}"');
       final r = await ShellCmd.run(cmd, runInShell: true);
-      expect(r.stdout.toString(), '${Platform.environment[key]}\n');
+      expect(r.stdout.toString(), '${Platform.environment[key]}$eol');
     });
     test('env vars blocked', () async {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
       final cmd = (isWindows ? 'echo "^%$key^%"' : 'echo "\\\$$key"');
       final r = await ShellCmd.run(cmd, runInShell: true);
-      expect(r.stdout.toString(), '\$$key\n');
+      expect(r.stdout.toString(), (isWindows ? 'echo "%$key%"' : 'echo "\$$key"'));
     });
   });
   group('split -', () {
