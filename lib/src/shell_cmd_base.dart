@@ -213,7 +213,7 @@ class ShellCmd {
         continue;
       }
 
-      if (next == $commentStart) {
+      if (next == $lineCommentStart) {
         // Section 2.3: If the current character is a line comment start
         // [and the previous characters was not part of a word], it and all
         // subsequent characters up to, but excluding, the next <newline>
@@ -256,6 +256,7 @@ class ShellCmd {
             quoteStart = scanner.position - 1;
           }
           continue;
+        case $ampersand:
         case $greaterThan:
         case $lessThan:
         case $pipe:

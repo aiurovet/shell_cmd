@@ -14,7 +14,7 @@ var $escape = getEscapeCharCode();
 
 /// Start of a line comment (not applicable to Windows, can be changed in unit tests)
 ///
-var $commentStart = getCommentStartCharCode();
+var $lineCommentStart = getCommentStartCharCode();
 
 ////////////////////////////////////////////////////////////////////////////////////////
 // Supplementary global methods
@@ -36,7 +36,7 @@ int getEscapeCharCode([bool? isWindows]) =>
 /// useful for unit tests)
 ///
 void setPlatformCharCodes({bool? isWindows}) {
-  $commentStart = getCommentStartCharCode(isWindows);
+  $lineCommentStart = getCommentStartCharCode(isWindows);
   $escape = getEscapeCharCode(isWindows);
 }
 
