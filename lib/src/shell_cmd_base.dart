@@ -80,7 +80,8 @@ class ShellCmd {
     final scriptFile = File(scriptPath);
 
     try {
-      await scriptFile.writeAsString(_toScript(command));
+      final script = _toScript(command);
+      await scriptFile.writeAsString(script, flush: true);
       return scriptPath;
     } on Exception catch (_) {
       await deleteTempScript(scriptPath);
@@ -107,7 +108,8 @@ class ShellCmd {
     final scriptFile = File(scriptPath);
 
     try {
-      scriptFile.writeAsStringSync(_toScript(command));
+      final script = _toScript(command);
+      scriptFile.writeAsStringSync(script, flush: true);
       return scriptPath;
     } on Exception catch (_) {
       deleteTempScriptSync(scriptPath);
@@ -190,12 +192,14 @@ class ShellCmd {
       Encoding? stderrEncoding = systemEncoding}) async {
     final args = <String>[];
     String? exe;
+    String? tempScriptPath;
 
     if (isWindows && runInShell) {
-      exe = await createTempScript(command);
-    } else {
-      exe = _prepareRun(args, command, runInShell);
+      tempScriptPath = createTempScriptSync(command);
+      command = tempScriptPath;
     }
+
+    exe = _prepareRun(args, command, runInShell);
 
     if (exe.isEmpty) {
       return getEmptyResult(1);
@@ -210,8 +214,8 @@ class ShellCmd {
           stdoutEncoding: stdoutEncoding,
           stderrEncoding: stderrEncoding);
     } finally {
-      if (isWindows && runInShell) {
-        await deleteTempScript(exe);
+      if ((tempScriptPath != null) && tempScriptPath.isNotEmpty) {
+        deleteTempScriptSync(tempScriptPath);
       }
     }
   }
@@ -228,12 +232,14 @@ class ShellCmd {
       Encoding? stderrEncoding = systemEncoding}) {
     final args = <String>[];
     String? exe;
+    String? tempScriptPath;
 
     if (isWindows && runInShell) {
-      exe = createTempScriptSync(command);
-    } else {
-      exe = _prepareRun(args, command, runInShell);
+      tempScriptPath = createTempScriptSync(command);
+      command = tempScriptPath;
     }
+
+    exe = _prepareRun(args, command, runInShell);
 
     if (exe.isEmpty) {
       return getEmptyResult(1);
@@ -248,15 +254,15 @@ class ShellCmd {
         stdoutEncoding: stdoutEncoding,
         stderrEncoding: stderrEncoding);
     } finally {
-      if (isWindows && runInShell) {
-        deleteTempScriptSync(exe);
+      if ((tempScriptPath != null) && tempScriptPath.isNotEmpty) {
+        deleteTempScriptSync(tempScriptPath);
       }
     }
   }
 
   /// Set default OS-specific shell
   ///
-  static String setDefaultShell({String? exe, bool force = false}) {
+  static String setShell({String? exe, bool force = false}) {
     if ((exe == null) || exe.isEmpty) {
       if (force || shell.isEmpty) {
         shell = getShell();
@@ -485,15 +491,8 @@ class ShellCmd {
 
   /// Converts command to script
   ///
-  static String _getScriptPrefix() {
-    var prefix = tempScriptPrefix;
-
-    if (isWindows) {
-      prefix += (isWindows ? '' : '.bat');
-    }
-
-    return prefix;
-  }
+  static String _getScriptPrefix() =>
+    (isWindows ? '$tempScriptPrefix.bat' : tempScriptPrefix);
 
   /// Retrieves directory list from PATH variable and fills the list of
   /// extensions with either the current extension or from PATHEXT if
@@ -503,15 +502,12 @@ class ShellCmd {
     var exe = '';
     args.clear();
 
-    setDefaultShell();
+    setShell();
 
     if (runInShell) {
-      exe = getShell();
       args.add(isWindows ? '/c' : '-c');
-      
-      if (!isWindows) {
-        args.add(command);
-      }
+      args.add(command);
+      exe = shell;
     } else {
       args.addAll(split(command));
       exe = extractExecutable(args);
@@ -551,11 +547,11 @@ class ShellCmd {
   /// Converts command to script
   ///
   static String _toScript(String command) {
-    if (command.isEmpty || isWindows) {
+    if (command.isEmpty || !isWindows) {
       return command;
     }
     
-    final nl = lineBreak;
-    return '@echo off$nl$command${nl}exit /B %errorlevel%$nl';
+    final n = lineBreak;
+    return '@echo off$n$command${n}exit /B %errorlevel%$n';
   }
 }

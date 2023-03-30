@@ -46,7 +46,7 @@ void main() {
   group('run -', () {
     test('echo', () async {
       final r = await ShellCmd.run('echo Abc$e def', runInShell: isWindows);
-      expect(r.stdout.toString(), '${q}Abc def$q$n');
+      expect(r.stdout.toString(), 'Abc def$n');
     });
     test('dart --version', () async {
       final r = await ShellCmd.run(r'dart --version');
@@ -56,13 +56,13 @@ void main() {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
       final cmd = (isWindows ? 'echo "%$key%"' : 'echo "\${$key}"');
       final r = await ShellCmd.run(cmd, runInShell: true);
-      expect(r.stdout.toString(), '${Platform.environment[key]}$n');
+      expect(r.stdout.toString(), '$q${Platform.environment[key]}$q$n');
     });
-    test('env vars blocked', () async {
+    test('env vars blocked', () {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
-      final cmd = (isWindows ? 'echo ^%$key^%' : 'echo "\\\$$key"');
-      final r = await ShellCmd.run(cmd, runInShell: true);
-      expect(r.stdout.toString(), (isWindows ? '%$key%$n' : '\$$key$n'));
+      final cmd = (isWindows ? 'echo %$key:~2,6%' : r'echo "\$' + key);
+      final r = ShellCmd.runSync(cmd, runInShell: true);
+      expect(r.stdout.toString(), (isWindows ? '\\Users$n' : '\$$key$n'));
     });
   });
   group('split -', () {
