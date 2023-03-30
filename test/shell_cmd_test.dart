@@ -60,7 +60,7 @@ void main() {
     });
     test('env vars blocked', () {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
-      final cmd = (isWindows ? 'echo %$key:~2,6%' : r'echo "\$' + key);
+      final cmd = (isWindows ? 'echo %$key:~2,6%' : r'echo "\$' + key + r'"');
       final r = ShellCmd.runSync(cmd, runInShell: true);
       expect(r.stdout.toString(), (isWindows ? '\\Users$n' : '\$$key$n'));
     });
