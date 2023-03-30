@@ -7,9 +7,11 @@ Future<void> main() async {
   print('\nIsWindows: ${ShellCmd.isWindows}');
   print('\nDefShell: ${ShellCmd.getShell()}');
 
-  final cmd = (ShellCmd.isWindows ? 'echo. & echo %CD%' : 'echo "" && echo `pwd`');
+  final cmd =
+      (ShellCmd.isWindows ? 'echo. & echo %CD%' : 'echo "" && echo `pwd`');
   final r = await ShellCmd.run(cmd, runInShell: true);
 
   print('\nSplit: ${ShellCmd.split(cmd)}');
-  print('\nCurDir:\n${r.exitCode == 0 ? 'Success' : 'Error ${r.exitCode}'}\n${r.stdout.toString()}***');
+  print(
+      '\nCurDir:\n${r.exitCode == 0 ? 'Success' : 'Error ${r.exitCode}'}\n${r.stdout.toString()}***');
 }

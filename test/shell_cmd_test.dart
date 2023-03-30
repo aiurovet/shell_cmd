@@ -151,7 +151,8 @@ void main() {
     test('cmd/echo', () async {
       if (isWindows) {
         final sysRoot = Platform.environment['SystemRoot'];
-        final resolved = p.canonicalize(p.join(p.join(sysRoot!, 'system32'), 'cmd.exe'));
+        final resolved =
+            p.canonicalize(p.join(p.join(sysRoot!, 'system32'), 'cmd.exe'));
         expect(p.canonicalize(await ShellCmd.which(r'cmd')), resolved);
       } else {
         expect(await ShellCmd.which(r'echo'), '/usr/bin/echo');
@@ -162,7 +163,8 @@ void main() {
     test('cmd/echo', () {
       if (isWindows) {
         final sysRoot = Platform.environment['SystemRoot'];
-        final resolved = p.canonicalize(p.join(p.join(sysRoot!, 'system32'), 'cmd.exe'));
+        final resolved =
+            p.canonicalize(p.join(p.join(sysRoot!, 'system32'), 'cmd.exe'));
         expect(p.canonicalize(ShellCmd.whichSync(r'cmd')), resolved);
       } else {
         expect(ShellCmd.whichSync(r'echo'), '/usr/bin/echo');

@@ -247,12 +247,12 @@ class ShellCmd {
 
     try {
       return Process.runSync(exe, args,
-        workingDirectory: workingDirectory,
-        environment: environment,
-        includeParentEnvironment: includeParentEnvironment,
-        runInShell: false,
-        stdoutEncoding: stdoutEncoding,
-        stderrEncoding: stderrEncoding);
+          workingDirectory: workingDirectory,
+          environment: environment,
+          includeParentEnvironment: includeParentEnvironment,
+          runInShell: false,
+          stdoutEncoding: stdoutEncoding,
+          stderrEncoding: stderrEncoding);
     } finally {
       if ((tempScriptPath != null) && tempScriptPath.isNotEmpty) {
         deleteTempScriptSync(tempScriptPath);
@@ -492,13 +492,14 @@ class ShellCmd {
   /// Converts command to script
   ///
   static String _getScriptPrefix() =>
-    (isWindows ? '$tempScriptPrefix.bat' : tempScriptPrefix);
+      (isWindows ? '$tempScriptPrefix.bat' : tempScriptPrefix);
 
   /// Retrieves directory list from PATH variable and fills the list of
   /// extensions with either the current extension or from PATHEXT if
   /// [fileName] has no extension under Windows
   ///
-  static String _prepareRun(List<String> args, String command, bool runInShell) {
+  static String _prepareRun(
+      List<String> args, String command, bool runInShell) {
     var exe = '';
     args.clear();
 
@@ -550,7 +551,7 @@ class ShellCmd {
     if (command.isEmpty || !isWindows) {
       return command;
     }
-    
+
     final n = lineBreak;
     return '@echo off$n$command${n}exit /B %errorlevel%$n';
   }
