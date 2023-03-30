@@ -12,18 +12,133 @@ import 'package:string_scanner/string_scanner.dart';
 /// Static API to split an arbitrary command and to execute that
 ///
 class ShellCmd {
-  /// Default shell executable for Linux, can be changed
-  /// (the same shell applies to macOS, Android and iOS)
+  /// Current shell executable filename or full path
   ///
-  static String defaultShell = '';
+  static String shell = '';
+
+  /// Default shell executable filename or full path
+  ///
+  static final defaultShell = (isWindows ? 'cmd.exe' : 'sh');
 
   /// Separator used to split directories in the PATH variable
   ///
   static final dirListSeparator = (isWindows ? ';' : ':');
 
+  /// Line separator
+  ///
+  static final lineBreak = (isWindows ? '\r\n' : '\n');
+
   /// Const: current OS is Windows
   ///
   static final isWindows = Platform.isWindows;
+
+  /// Const: environment variable name to retrieve OS default shell
+  ///
+  static final shellEnvKey = (isWindows ? 'COMSPEC' : 'SHELL');
+
+  /// Const: temporary folder prefix
+  ///
+  static const tempScriptPrefix = 'shell_cmd';
+
+  /// Under POSIX-compliant OS, does nothing and returns null.\
+  /// Under Windows, creates a temporary directory (non-blocking)
+  /// and returns that
+  ///
+  static Future<Directory?> createTempDir() async {
+    if (!isWindows) {
+      return null;
+    }
+
+    return await Directory.systemTemp.createTemp(tempScriptPrefix);
+  }
+
+  /// Under POSIX-compliant OS, does nothing and returns null.\
+  /// Under Windows, creates a temporary directory (blocking)
+  /// and returns that
+  ///
+  static Directory? createTempDirSync() {
+    if (!isWindows) {
+      return null;
+    }
+
+    return Directory.systemTemp.createTempSync(tempScriptPrefix);
+  }
+
+  /// Under POSIX-compliant OS, does nothing and returns an empty string.\
+  /// Under Windows, creates a temporary folder (non-blocking) and writes
+  /// [command] to an output file.\
+  /// This file should be executed and deleted with the containing folder
+  ///
+  static Future<String> createTempScript(String command) async {
+    final dir = await createTempDir();
+
+    if (dir == null) {
+      return '';
+    }
+
+    final scriptPath = p.join(dir.path, _getScriptPrefix());
+    final scriptFile = File(scriptPath);
+
+    try {
+      await scriptFile.writeAsString(_toScript(command));
+      return scriptPath;
+    } on Exception catch (_) {
+      await deleteTempScript(scriptPath);
+      rethrow;
+    } on Error catch (_) {
+      await deleteTempScript(scriptPath);
+      rethrow;
+    }
+  }
+
+  /// Under POSIX-compliant OS, does nothing and returns an empty string.\
+  /// Under Windows, creates a temporary folder (blocking) and writes
+  /// [command] to an output file.\
+  /// This file should be executed and deleted with the containing folder
+  ///
+  static String createTempScriptSync(String command) {
+    final dir = createTempDirSync();
+
+    if (dir == null) {
+      return '';
+    }
+
+    final scriptPath = p.join(dir.path, _getScriptPrefix());
+    final scriptFile = File(scriptPath);
+
+    try {
+      scriptFile.writeAsStringSync(_toScript(command));
+      return scriptPath;
+    } on Exception catch (_) {
+      deleteTempScriptSync(scriptPath);
+      rethrow;
+    } on Error catch (_) {
+      deleteTempScriptSync(scriptPath);
+      rethrow;
+    }
+  }
+
+  /// Deletes file created by createTempScript as well as containing
+  /// folder (non-blocking)
+  ///
+  static Future<void> deleteTempScript(String? scriptPath) async {
+    if ((scriptPath == null) || scriptPath.isEmpty) {
+      return;
+    }
+
+    await File(scriptPath).parent.delete(recursive: true);
+  }
+
+  /// Deletes file created by createTempScript as well as containing
+  /// folder (blocking)
+  ///
+  static void deleteTempScriptSync(String? scriptPath) {
+    if ((scriptPath == null) || scriptPath.isEmpty) {
+      return;
+    }
+
+    File(scriptPath).parent.deleteSync(recursive: true);
+  }
 
   /// Removes the first argument from [args] and returns that
   ///
@@ -41,21 +156,21 @@ class ShellCmd {
     return exe;
   }
 
-  /// Get default OS-specific shell
+  /// Get current shell
   ///
-  static String getDefaultShell() {
-    if (defaultShell.isNotEmpty) {
-      return defaultShell;
+  static String getShell() {
+    if (shell.isNotEmpty) {
+      return shell;
     }
 
     final env = Platform.environment;
-    defaultShell = env[isWindows ? 'COMSPEC' : 'SHELL'] ?? '';
+    shell = env[shellEnvKey] ?? '';
 
-    if (defaultShell.isEmpty) {
-      defaultShell = (isWindows ? 'cmd.exe' : 'sh');
+    if (shell.isEmpty) {
+      shell = defaultShell;
     }
 
-    return defaultShell;
+    return shell;
   }
 
   /// Get empty process result in case of no need to run command
@@ -73,21 +188,32 @@ class ShellCmd {
       List<String>? shellArgs,
       Encoding? stdoutEncoding = systemEncoding,
       Encoding? stderrEncoding = systemEncoding}) async {
-    setDefaultShell();
-    final args = split(command, forRunInShell: runInShell);
-    final exe = extractExecutable(args);
+    final args = <String>[];
+    String? exe;
+
+    if (isWindows && runInShell) {
+      exe = await createTempScript(command);
+    } else {
+      exe = _prepareRun(args, command, runInShell);
+    }
 
     if (exe.isEmpty) {
       return getEmptyResult(1);
     }
 
-    return await Process.run(exe, args,
-        workingDirectory: workingDirectory,
-        environment: environment,
-        includeParentEnvironment: includeParentEnvironment,
-        runInShell: false,
-        stdoutEncoding: stdoutEncoding,
-        stderrEncoding: stderrEncoding);
+    try {
+      return await Process.run(exe, args,
+          workingDirectory: workingDirectory,
+          environment: environment,
+          includeParentEnvironment: includeParentEnvironment,
+          runInShell: false,
+          stdoutEncoding: stdoutEncoding,
+          stderrEncoding: stderrEncoding);
+    } finally {
+      if (isWindows && runInShell) {
+        await deleteTempScript(exe);
+      }
+    }
   }
 
   /// Split an arbitrary [command] and execute that in the blocking mode.
@@ -100,35 +226,46 @@ class ShellCmd {
       List<String>? shellArgs,
       Encoding? stdoutEncoding = systemEncoding,
       Encoding? stderrEncoding = systemEncoding}) {
-    setDefaultShell();
-    final args = split(command, forRunInShell: runInShell);
-    final exe = extractExecutable(args);
+    final args = <String>[];
+    String? exe;
+
+    if (isWindows && runInShell) {
+      exe = createTempScriptSync(command);
+    } else {
+      exe = _prepareRun(args, command, runInShell);
+    }
 
     if (exe.isEmpty) {
       return getEmptyResult(1);
     }
 
-    return Process.runSync(exe, args,
+    try {
+      return Process.runSync(exe, args,
         workingDirectory: workingDirectory,
         environment: environment,
         includeParentEnvironment: includeParentEnvironment,
         runInShell: false,
         stdoutEncoding: stdoutEncoding,
         stderrEncoding: stderrEncoding);
+    } finally {
+      if (isWindows && runInShell) {
+        deleteTempScriptSync(exe);
+      }
+    }
   }
 
   /// Set default OS-specific shell
   ///
   static String setDefaultShell({String? exe, bool force = false}) {
     if ((exe == null) || exe.isEmpty) {
-      if (force || defaultShell.isEmpty) {
-        defaultShell = getDefaultShell();
+      if (force || shell.isEmpty) {
+        shell = getShell();
       }
     } else {
-      defaultShell = exe;
+      shell = exe;
     }
 
-    return defaultShell;
+    return shell;
   }
 
   /// Split an arbitrary command into separate unquoted tokens
@@ -140,31 +277,13 @@ class ShellCmd {
   /// when  the first quote appears inside the current token like
   /// --option="value"
   ///
-  static List<String> split(String command, {bool forRunInShell = false}) {
+  static List<String> split(String command) {
     final args = <String>[];
 
     // If command is empty, just leave
     //
     if (command.isEmpty) {
       return args;
-    }
-
-    if (forRunInShell) {
-      args.add(getDefaultShell());
-
-      if (!isWindows) {
-        // Shells in POSIX-compliant OSes are capable of running any
-        // string command exactly like in a shell script. Only
-        //
-        return args
-          ..add('-c')
-          ..add(command);
-      }
-
-      // Poor cmd.exe fails on quoted filenames hence need to perform
-      // the real split
-      //
-      args.add('/c');
     }
 
     // Should not trim command from the right, as there might happen
@@ -198,7 +317,7 @@ class ShellCmd {
       if (next == $escape) {
         if (quoteLevel == 1) {
           hasToken = true;
-          token.writeCharCode(next);
+          token.writeCharCode($escape);
         } else {
           isEscaped = true;
         }
@@ -364,6 +483,43 @@ class ShellCmd {
     return '';
   }
 
+  /// Converts command to script
+  ///
+  static String _getScriptPrefix() {
+    var prefix = tempScriptPrefix;
+
+    if (isWindows) {
+      prefix += (isWindows ? '' : '.bat');
+    }
+
+    return prefix;
+  }
+
+  /// Retrieves directory list from PATH variable and fills the list of
+  /// extensions with either the current extension or from PATHEXT if
+  /// [fileName] has no extension under Windows
+  ///
+  static String _prepareRun(List<String> args, String command, bool runInShell) {
+    var exe = '';
+    args.clear();
+
+    setDefaultShell();
+
+    if (runInShell) {
+      exe = getShell();
+      args.add(isWindows ? '/c' : '-c');
+      
+      if (!isWindows) {
+        args.add(command);
+      }
+    } else {
+      args.addAll(split(command));
+      exe = extractExecutable(args);
+    }
+
+    return exe;
+  }
+
   /// Retrieves directory list from PATH variable and fills the list of
   /// extensions with either the current extension or from PATHEXT if
   /// [fileName] has no extension under Windows
@@ -390,5 +546,16 @@ class ShellCmd {
     }
 
     return tit;
+  }
+
+  /// Converts command to script
+  ///
+  static String _toScript(String command) {
+    if (command.isEmpty || isWindows) {
+      return command;
+    }
+    
+    final nl = lineBreak;
+    return '@echo off$nl$command${nl}exit /B %errorlevel%$nl';
   }
 }

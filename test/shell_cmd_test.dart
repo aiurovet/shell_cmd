@@ -12,7 +12,9 @@ import 'package:test/test.dart';
 ///
 void main() {
   final isWindows = Platform.isWindows;
-  final eol = (isWindows ? '\r\n' : '\n');
+  final e = String.fromCharCode($escape);
+  final n = ShellCmd.lineBreak;
+  final q = (isWindows ? '"' : '');
 
   group('extractExecutable -', () {
     test('empty', () {
@@ -36,22 +38,15 @@ void main() {
     });
   });
   group('shell -', () {
-    test('getDefaultShell -', () {
-      String expected;
-      if (isWindows) {
-        expected = Platform.environment['COMSPEC'] ?? 'cmd.exe';
-      } else {
-        expected = Platform.environment['SHELL'] ?? 'sh';
-      }
-      expect(ShellCmd.getDefaultShell(), expected);
+    test('getShell -', () {
+      final expected = Platform.environment[ShellCmd.shellEnvKey];
+      expect(ShellCmd.getShell(), expected);
     });
   });
   group('run -', () {
     test('echo', () async {
-      final e = String.fromCharCode($escape);
-      final q = (isWindows ? '"' : '');
       final r = await ShellCmd.run('echo Abc$e def', runInShell: isWindows);
-      expect(r.stdout.toString(), '${q}Abc def$q$eol');
+      expect(r.stdout.toString(), '${q}Abc def$q$n');
     });
     test('dart --version', () async {
       final r = await ShellCmd.run(r'dart --version');
@@ -61,13 +56,13 @@ void main() {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
       final cmd = (isWindows ? 'echo "%$key%"' : 'echo "\${$key}"');
       final r = await ShellCmd.run(cmd, runInShell: true);
-      expect(r.stdout.toString(), '${Platform.environment[key]}$eol');
+      expect(r.stdout.toString(), '${Platform.environment[key]}$n');
     });
     test('env vars blocked', () async {
       final key = (isWindows ? r'USERPROFILE' : 'HOME');
-      final cmd = (isWindows ? 'echo "^%$key^%"' : 'echo "\\\$$key"');
+      final cmd = (isWindows ? 'echo ^%$key^%' : 'echo "\\\$$key"');
       final r = await ShellCmd.run(cmd, runInShell: true);
-      expect(r.stdout.toString(), (isWindows ? 'echo "%$key%"' : 'echo "\$$key"'));
+      expect(r.stdout.toString(), (isWindows ? '%$key%$n' : '\$$key$n'));
     });
   });
   group('split -', () {
@@ -109,19 +104,6 @@ void main() {
     });
     test('tab inside a double-quoted arg', () {
       expect(ShellCmd.split('"ab\tc"'), ['ab\tc']);
-    });
-    test('for run in shell', () {
-      final shell = ShellCmd.getDefaultShell();
-      final command = 'echo "ab c" "def gh"';
-      var expected = <String>[];
-
-      if (isWindows) {
-        expected = [shell, '/c', 'echo', 'ab c', 'def gh'];
-      } else {
-        expected = [shell, '-c', command];
-      }
-
-      expect(ShellCmd.split(command, forRunInShell: true), expected);
     });
   });
   group('split -', () {
