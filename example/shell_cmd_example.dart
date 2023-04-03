@@ -5,13 +5,15 @@ import 'package:shell_cmd/shell_cmd.dart';
 Future<void> main() async {
   print('\nOS: ${Platform.operatingSystemVersion}');
   print('\nIsWindows: ${ShellCmd.isWindows}');
-  print('\nDefShell: ${ShellCmd.getShell()}');
+  print('\nDefShell: ${ShellCmd.resetShell()}');
 
-  final cmd =
-      (ShellCmd.isWindows ? 'echo. & echo %CD%' : 'echo "" && echo `pwd`');
-  final r = await ShellCmd.run(cmd, runInShell: true);
+  final cmdWin = 'echo. & echo %CD%';
+  final cmdPsx = 'echo "" && echo `pwd`';
+  final cmd = ShellCmd(ShellCmd.isWindows ? cmdWin : cmdPsx);
+  final result = await cmd.run(runInShell: true);
+  final status =
+      (result.exitCode == 0 ? 'Success' : 'Error ${result.exitCode}');
 
-  print('\nSplit: ${ShellCmd.split(cmd)}');
-  print(
-      '\nCurDir:\n${r.exitCode == 0 ? 'Success' : 'Error ${r.exitCode}'}\n${r.stdout.toString()}***');
+  print('\nSplit - Exe: ${cmd.program}, Args: ${cmd.args}');
+  print('\nCurDir:\n$status\n${result.stdout.toString()}***');
 }

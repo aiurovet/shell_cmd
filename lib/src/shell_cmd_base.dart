@@ -4,9 +4,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import "package:charcode/ascii.dart";
+import 'package:charcode/charcode.dart';
 import "package:path/path.dart" as p;
-import 'package:shell_cmd/src/ascii_ext.dart';
 import 'package:string_scanner/string_scanner.dart';
 
 /// Static API to split an arbitrary command and to execute that
@@ -14,19 +13,59 @@ import 'package:string_scanner/string_scanner.dart';
 class ShellCmd {
   /// Current shell executable filename or full path
   ///
-  static String shell = '';
+  static final ShellCmd shell = ShellCmd();
 
   /// Default shell executable filename or full path
   ///
-  static final defaultShell = (isWindows ? 'cmd.exe' : 'sh');
+  static final defaultShell = ShellCmd(defaultShellCommand);
+
+  /// Default shell executable filename or full path
+  ///
+  static final defaultShellCommand = (isWindows ? 'cmd.exe /c' : 'sh -c');
 
   /// Separator used to split directories in the PATH variable
   ///
   static final dirListSeparator = (isWindows ? ';' : ':');
 
-  /// Line separator
+  /// Const: char for the character escaping
+  ///
+  static final escapeChar = isWindows ? '^' : r'\';
+
+  /// Const: char code for the character escaping
+  ///
+  static final escapeCharCode = isWindows ? $circumflex : $backslash;
+
+  /// Const: char for the character escaping
+  ///
+  static final escapeCharEscaped = escapeChar + escapeChar;
+
+  /// Const: Line separator
   ///
   static final lineBreak = (isWindows ? '\r\n' : '\n');
+
+  /// Const: char for the line comment start
+  ///
+  static final lineCommentStartChar = isWindows ? '' : '#';
+
+  /// Const: char code for the line comment start
+  ///
+  static final lineCommentStartCharCode = isWindows ? 0 : $hash;
+
+  /// Const: plain space char
+  ///
+  static const spaceChar = ' ';
+
+  /// Const: plain space char escaped
+  ///
+  static final spaceCharEscaped = escapeChar + spaceChar;
+
+  /// Const: tab char
+  ///
+  static final tabChar = '\t';
+
+  /// Const: plain space char escaped
+  ///
+  static final tabCharEscaped = escapeChar + tabChar;
 
   /// Const: current OS is Windows
   ///
@@ -40,54 +79,83 @@ class ShellCmd {
   ///
   static const tempScriptPrefix = 'shell_cmd';
 
+  /// Actual arguments
+  ///
+  final args = <String>[];
+
+  /// Program (executable) path
+  ///
+  var program = '';
+
+  /// When true, running the command in shell is recommended
+  ///
+  var runInShell = false;
+
+  /// Source command string
+  ///
+  var source = '';
+
+  /// Default constructor
+  ///
+  ShellCmd([String? command]) {
+    parse(command);
+  }
+
+  static ShellCmd fromParsed(String program, List<String> args) =>
+      ShellCmd()..init(null, program, args);
+
+  /// Resets [program] and [args]
+  ///
+  void clear() {
+    args.clear();
+    program = '';
+    runInShell = false;
+    source = '';
+  }
+
+  /// Copy constructor
+  ///
+  void copyFrom(ShellCmd that,
+          {String? source, String? program, List<String>? args}) =>
+      init(source ?? that.source, program ?? that.program, args ?? that.args);
+
   /// Under POSIX-compliant OS, does nothing and returns null.\
   /// Under Windows, creates a temporary directory (non-blocking)
   /// and returns that
   ///
-  static Future<Directory?> createTempDir() async {
-    if (!isWindows) {
-      return null;
-    }
-
-    return await Directory.systemTemp.createTemp(tempScriptPrefix);
-  }
+  static Future<Directory> createTempDir() async =>
+      await Directory.systemTemp.createTemp(tempScriptPrefix);
 
   /// Under POSIX-compliant OS, does nothing and returns null.\
   /// Under Windows, creates a temporary directory (blocking)
   /// and returns that
   ///
-  static Directory? createTempDirSync() {
-    if (!isWindows) {
-      return null;
-    }
-
-    return Directory.systemTemp.createTempSync(tempScriptPrefix);
-  }
+  static Directory createTempDirSync() =>
+      Directory.systemTemp.createTempSync(tempScriptPrefix);
 
   /// Under POSIX-compliant OS, does nothing and returns an empty string.\
   /// Under Windows, creates a temporary folder (non-blocking) and writes
   /// [command] to an output file.\
   /// This file should be executed and deleted with the containing folder
   ///
-  static Future<String> createTempScript(String command) async {
-    final dir = await createTempDir();
-
-    if (dir == null) {
+  static Future<String> createTempScript(String? command) async {
+    if ((command == null) || command.isEmpty) {
       return '';
     }
 
-    final scriptPath = p.join(dir.path, _getScriptPrefix());
-    final scriptFile = File(scriptPath);
+    final dir = await createTempDir();
+    final path = p.join(dir.path, _getScriptName());
+    final file = File(path);
 
     try {
       final script = _toScript(command);
-      await scriptFile.writeAsString(script, flush: true);
-      return scriptPath;
+      await file.writeAsString(script, flush: true);
+      return path;
     } on Exception catch (_) {
-      await deleteTempScript(scriptPath);
+      await deleteTempScript(path);
       rethrow;
     } on Error catch (_) {
-      await deleteTempScript(scriptPath);
+      await deleteTempScript(path);
       rethrow;
     }
   }
@@ -97,14 +165,14 @@ class ShellCmd {
   /// [command] to an output file.\
   /// This file should be executed and deleted with the containing folder
   ///
-  static String createTempScriptSync(String command) {
-    final dir = createTempDirSync();
-
-    if (dir == null) {
+  static String createTempScriptSync(String? command) {
+    if ((command == null) || command.isEmpty) {
       return '';
     }
 
-    final scriptPath = p.join(dir.path, _getScriptPrefix());
+    final dir = createTempDirSync();
+
+    final scriptPath = p.join(dir.path, _getScriptName());
     final scriptFile = File(scriptPath);
 
     try {
@@ -142,37 +210,46 @@ class ShellCmd {
     File(scriptPath).parent.deleteSync(recursive: true);
   }
 
-  /// Removes the first argument from [args] and returns that
+  /// Convenience method to merge program and arguments into a single string
   ///
-  static String extractExecutable(List<String> args) {
-    if (args.isEmpty) {
-      return '';
+  static String escape(String arg) {
+    final argLen = arg.length;
+
+    if (argLen <= 0) {
+      return arg;
     }
 
-    final exe = args[0];
+    final firstChar = arg[0];
+    final lastChar = arg[argLen - 1];
 
-    if (args.isNotEmpty) {
-      args.removeAt(0);
+    if ((argLen > 1) && (firstChar == lastChar)) {
+      if ((firstChar == "'") || (firstChar == '"')) {
+        return arg;
+      }
     }
 
-    return exe;
-  }
+    final hasSpaces = arg.contains(spaceChar);
+    final hasTabs = arg.contains(tabChar);
 
-  /// Get current shell
-  ///
-  static String getShell() {
-    if (shell.isNotEmpty) {
-      return shell;
+    if (!hasSpaces && !hasTabs) {
+      return arg;
     }
 
-    final env = Platform.environment;
-    shell = env[shellEnvKey] ?? '';
+    final hasEscapes = arg.contains(escapeChar);
 
-    if (shell.isEmpty) {
-      shell = defaultShell;
+    if (hasEscapes) {
+      arg = arg.replaceAll(escapeChar, escapeCharEscaped);
     }
 
-    return shell;
+    if (hasSpaces) {
+      arg = arg.replaceAll(spaceChar, spaceCharEscaped);
+    }
+
+    if (hasTabs) {
+      arg = arg.replaceAll(tabChar, tabCharEscaped);
+    }
+
+    return arg;
   }
 
   /// Get empty process result in case of no need to run command
@@ -180,33 +257,46 @@ class ShellCmd {
   static ProcessResult getEmptyResult(int exitCode, [String? error]) =>
       ProcessResult(0, exitCode, null, error);
 
+  /// Copy constructor
+  ///
+  void init([String? newSource, String? newProgram, List<String>? newArgs]) {
+    program = newProgram ?? '';
+    args.clear();
+
+    if ((newArgs != null) && newArgs.isNotEmpty) {
+      args.addAll(newArgs);
+    }
+
+    _setSource(newSource);
+  }
+
+  /// Copy from the default shell
+  ///
+  static ShellCmd resetShell() {
+    final shellProg = Platform.environment[shellEnvKey] ?? '';
+    return shell..copyFrom(defaultShell, program: shellProg);
+  }
+
   /// Split an arbitrary [command] and execute that in the non-blocking mode.
   ///
-  static Future<ProcessResult> run(String command,
-      {String? workingDirectory,
+  Future<ProcessResult> run(
+      {String? command,
+      String? workingDirectory,
       Map<String, String>? environment,
       bool includeParentEnvironment = true,
-      bool runInShell = false,
+      bool? runInShell,
       List<String>? shellArgs,
       Encoding? stdoutEncoding = systemEncoding,
       Encoding? stderrEncoding = systemEncoding}) async {
-    final args = <String>[];
-    String? exe;
-    String? tempScriptPath;
+    runInShell ??= this.runInShell;
+    var tempScriptPath = await _prepareRun(command, runInShell);
 
-    if (isWindows && runInShell) {
-      tempScriptPath = createTempScriptSync(command);
-      command = tempScriptPath;
-    }
-
-    exe = _prepareRun(args, command, runInShell);
-
-    if (exe.isEmpty) {
+    if (program.isEmpty) {
       return getEmptyResult(1);
     }
 
     try {
-      return await Process.run(exe, args,
+      return await Process.run(program, args,
           workingDirectory: workingDirectory,
           environment: environment,
           includeParentEnvironment: includeParentEnvironment,
@@ -214,7 +304,7 @@ class ShellCmd {
           stdoutEncoding: stdoutEncoding,
           stderrEncoding: stderrEncoding);
     } finally {
-      if ((tempScriptPath != null) && tempScriptPath.isNotEmpty) {
+      if (tempScriptPath.isNotEmpty) {
         deleteTempScriptSync(tempScriptPath);
       }
     }
@@ -222,31 +312,29 @@ class ShellCmd {
 
   /// Split an arbitrary [command] and execute that in the blocking mode.
   ///
-  static ProcessResult runSync(String command,
-      {String? workingDirectory,
+  ProcessResult runSync(
+      {String? command,
+      String? workingDirectory,
       Map<String, String>? environment,
       bool includeParentEnvironment = true,
-      bool runInShell = false,
+      bool? runInShell,
       List<String>? shellArgs,
       Encoding? stdoutEncoding = systemEncoding,
       Encoding? stderrEncoding = systemEncoding}) {
-    final args = <String>[];
-    String? exe;
-    String? tempScriptPath;
+    runInShell ??= this.runInShell;
+    var tempScriptPath = _prepareRunSync(command, runInShell);
 
     if (isWindows && runInShell) {
-      tempScriptPath = createTempScriptSync(command);
+      tempScriptPath = createTempScriptSync(source);
       command = tempScriptPath;
     }
 
-    exe = _prepareRun(args, command, runInShell);
-
-    if (exe.isEmpty) {
+    if (program.isEmpty) {
       return getEmptyResult(1);
     }
 
     try {
-      return Process.runSync(exe, args,
+      return Process.runSync(program, args,
           workingDirectory: workingDirectory,
           environment: environment,
           includeParentEnvironment: includeParentEnvironment,
@@ -254,7 +342,7 @@ class ShellCmd {
           stdoutEncoding: stdoutEncoding,
           stderrEncoding: stderrEncoding);
     } finally {
-      if ((tempScriptPath != null) && tempScriptPath.isNotEmpty) {
+      if (tempScriptPath.isNotEmpty) {
         deleteTempScriptSync(tempScriptPath);
       }
     }
@@ -262,19 +350,20 @@ class ShellCmd {
 
   /// Set default OS-specific shell
   ///
-  static String setShell({String? exe, bool force = false}) {
-    if ((exe == null) || exe.isEmpty) {
-      if (force || shell.isEmpty) {
-        shell = getShell();
+  static ShellCmd setShell({String? command, bool force = false}) {
+    if ((command == null) || command.isEmpty) {
+      if (force || shell.program.isEmpty) {
+        resetShell();
       }
     } else {
-      shell = exe;
+      shell.parse(command);
     }
 
     return shell;
   }
 
   /// Split an arbitrary command into separate unquoted tokens
+  /// and move the first one to [program] if required.
   ///
   /// This method is a substantial rework of `shellSplit()` from
   /// the `io` package, as the latter is POSIX-specific and fails
@@ -283,19 +372,23 @@ class ShellCmd {
   /// when  the first quote appears inside the current token like
   /// --option="value"
   ///
-  static List<String> split(String command) {
-    final args = <String>[];
+  /// Populates instance members of 'this' and return is it
+  ///
+  void parse([String? source]) {
+    clear();
+
+    if ((source != null) && source.isNotEmpty) {
+      // Should not trim command from the right, as there might happen
+      // trailing escaped space
+      //
+      this.source = source.trimLeft();
+    }
 
     // If command is empty, just leave
     //
-    if (command.isEmpty) {
-      return args;
+    if (this.source.isEmpty) {
+      return;
     }
-
-    // Should not trim command from the right, as there might happen
-    // trailing escaped space
-    //
-    command = command.trimLeft();
 
     var hasToken = false; // not [token.isEmpty] when token gets restarted
     var isEscaped = false; // true when the escape character encountered
@@ -304,7 +397,7 @@ class ShellCmd {
     var prev = 0; // previous char code from comman
     var quoteLevel = 0; // 1 = single-quoted, 2 = double-quoted
     var quoteStart = -1; // position of the outer left quote character
-    final scanner = StringScanner(command);
+    final scanner = StringScanner(this.source);
     final token = StringBuffer(); // buffer for the current arg
 
     while (!scanner.isDone) {
@@ -320,10 +413,10 @@ class ShellCmd {
         continue;
       }
 
-      if (next == $escape) {
+      if (next == escapeCharCode) {
         if (quoteLevel == 1) {
           hasToken = true;
-          token.writeCharCode($escape);
+          token.writeCharCode(escapeCharCode);
         } else {
           isEscaped = true;
         }
@@ -338,7 +431,7 @@ class ShellCmd {
         continue;
       }
 
-      if (next == $lineCommentStart) {
+      if (next == lineCommentStartCharCode) {
         // Section 2.3: If the current character is a line comment start
         // [and the previous characters was not part of a word], it and all
         // subsequent characters up to, but excluding, the next <newline>
@@ -389,6 +482,8 @@ class ShellCmd {
         case $closeBracket:
         case $openParenthesis:
         case $closeParenthesis:
+          runInShell = true;
+
           if ((next == $openParenthesis) || (next == $closeParenthesis)) {
             if ((prev == $at) || (prev == $dollar)) {
               break;
@@ -412,8 +507,29 @@ class ShellCmd {
           if (hasToken) {
             break; // go to add token
           }
+          if (next == $lf) {
+            runInShell = true;
+          }
           continue;
         default:
+          if (isWindows) {
+            switch (next) {
+              case $exclamation:
+              case $percent:
+              case $plus:
+                runInShell = true;
+            }
+          } else {
+            switch (next) {
+              case $exclamation:
+              case $backquote:
+              case $dollar:
+              case $openBrace:
+              case $closeBrace:
+              case $semicolon:
+                runInShell = true;
+            }
+          }
           hasToken = true;
           token.writeCharCode(next);
           continue;
@@ -433,8 +549,28 @@ class ShellCmd {
       args.add(token.toString());
     }
 
-    return args;
+    if (args.isNotEmpty) {
+      program = args[0];
+      args.removeAt(0);
+    } else {
+      runInShell = false;
+    }
+
+    return;
   }
+
+  /// Opposite to split: convert [program] and [args] into a single string
+  /// with escaped components and assign that to [source]
+  ///
+  String toSource() {
+    _setSource();
+    return source;
+  }
+
+  /// Serializer
+  ///
+  @override
+  String toString() => source;
 
   /// Find full path by checking [fileName] in every directory of the PATH (non-blocking).\
   /// Returns [fileName] if [alwaysFound] is true, or an empty string otherwise.
@@ -489,32 +625,68 @@ class ShellCmd {
     return '';
   }
 
-  /// Converts command to script
+  /// Returns temporary script filename
   ///
-  static String _getScriptPrefix() =>
+  static String _getScriptName() =>
       (isWindows ? '$tempScriptPrefix.bat' : tempScriptPrefix);
+
+  /// Non-blocking wrapper to call [__prepareRun] and to create temp
+  /// script if needed.
+  ///
+  /// Returns path to temp script when relevant or an empty string.
+  ///
+  Future<String> _prepareRun(String? command, bool runInShell) async {
+    var tempScriptPath = '';
+
+    if (isWindows && runInShell) {
+      tempScriptPath = await createTempScript(source);
+      command = tempScriptPath;
+    }
+
+    __prepareRun(command, runInShell);
+
+    return tempScriptPath;
+  }
+
+  /// blocking wrapper to call [__prepareRun] and to create temp
+  /// script if needed.
+  ///
+  /// Returns path to temp script when relevant or an empty string.
+  ///
+  String _prepareRunSync(String? command, bool runInShell) {
+    var tempScriptPath = '';
+
+    if (isWindows && runInShell) {
+      tempScriptPath = createTempScriptSync(source);
+      command = tempScriptPath;
+    }
+
+    __prepareRun(command, runInShell);
+
+    return tempScriptPath;
+  }
 
   /// Retrieves directory list from PATH variable and fills the list of
   /// extensions with either the current extension or from PATHEXT if
   /// [fileName] has no extension under Windows
   ///
-  static String _prepareRun(
-      List<String> args, String command, bool runInShell) {
-    var exe = '';
-    args.clear();
+  void __prepareRun(String? command, bool runInShell) {
+    final hasNewSource =
+        ((command != null) && command.isNotEmpty && (command != source));
 
     setShell();
 
-    if (runInShell) {
-      args.add(isWindows ? '/c' : '-c');
-      args.add(command);
-      exe = shell;
-    } else {
-      args.addAll(split(command));
-      exe = extractExecutable(args);
+    if (!runInShell) {
+      if (hasNewSource) {
+        parse(command);
+      }
+      return;
     }
 
-    return exe;
+    final newSource = (hasNewSource ? command : source);
+    copyFrom(shell);
+    args.add(newSource);
+    _setSource();
   }
 
   /// Retrieves directory list from PATH variable and fills the list of
@@ -543,6 +715,27 @@ class ShellCmd {
     }
 
     return tit;
+  }
+
+  /// Set [source] from [program] and [args] if it wasn't available
+  /// while being constructed via [init].
+  ///
+  void _setSource([String? newSource]) {
+    if ((newSource != null) && newSource.isNotEmpty) {
+      source = newSource;
+      return;
+    }
+
+    var result = StringBuffer(escape(program));
+
+    for (var i = 0, n = args.length; i < n; i++) {
+      if (result.isNotEmpty) {
+        result.write(spaceChar);
+      }
+      result.write(escape(args[i]));
+    }
+
+    source = result.toString();
   }
 
   /// Converts command to script
