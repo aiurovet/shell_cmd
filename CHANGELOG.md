@@ -2,6 +2,7 @@
 
 - Refactored `tempScriptPrefix` into `tempScriptName`.
 - Improved the documentation.
+- Upgraded dependencies.
 
 ## 0.2.0
 
