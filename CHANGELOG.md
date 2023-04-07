@@ -1,3 +1,8 @@
+## 0.2.1
+
+- Refactored `tempScriptPrefix` into `tempScriptName`.
+- Improved the documentation.
+
 ## 0.2.0
 
 - Removed`split()` and `ascii_ext.dart`

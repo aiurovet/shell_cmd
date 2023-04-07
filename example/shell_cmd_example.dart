@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:shell_cmd/shell_cmd.dart';
 
+/// A showcase for the use of the package
+///
 Future<void> main() async {
   print('\nOS: ${Platform.operatingSystemVersion}');
   print('\nIsWindows: ${ShellCmd.isWindows}');

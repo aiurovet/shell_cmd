@@ -15,39 +15,39 @@ class ShellCmd {
   ///
   static final ShellCmd shell = ShellCmd();
 
-  /// Default shell executable filename or full path
+  /// Default shell executable and its args
   ///
   static final defaultShell = ShellCmd(defaultShellCommand);
 
-  /// Default shell executable filename or full path
+  /// Default shell executable and its args as a single string (source)
   ///
   static final defaultShellCommand = (isWindows ? 'cmd.exe /c' : 'sh -c');
 
-  /// Separator used to split directories in the PATH variable
+  /// Separator used to split directories in the PATH variable (OS-specific)
   ///
   static final dirListSeparator = (isWindows ? ';' : ':');
 
-  /// Const: char for the character escaping
+  /// Const: char for the character escaping (OS-specific)
   ///
   static final escapeChar = isWindows ? '^' : r'\';
 
-  /// Const: char code for the character escaping
+  /// Const: char code for the character escaping (OS-specific)
   ///
   static final escapeCharCode = isWindows ? $circumflex : $backslash;
 
-  /// Const: char for the character escaping
+  /// Const: char for the character escaping (OS-specific)
   ///
   static final escapeCharEscaped = escapeChar + escapeChar;
 
-  /// Const: Line separator
+  /// Const: Line separator (OS-specific)
   ///
   static final lineBreak = (isWindows ? '\r\n' : '\n');
 
-  /// Const: char for the line comment start
+  /// Const: char for the line comment start (OS-specific)
   ///
   static final lineCommentStartChar = isWindows ? '' : '#';
 
-  /// Const: char code for the line comment start
+  /// Const: char code for the line comment start (OS-specific)
   ///
   static final lineCommentStartCharCode = isWindows ? 0 : $hash;
 
@@ -55,7 +55,7 @@ class ShellCmd {
   ///
   static const spaceChar = ' ';
 
-  /// Const: plain space char escaped
+  /// Const: plain space char escaped (OS-specific)
   ///
   static final spaceCharEscaped = escapeChar + spaceChar;
 
@@ -63,7 +63,7 @@ class ShellCmd {
   ///
   static final tabChar = '\t';
 
-  /// Const: plain space char escaped
+  /// Const: plain space char escaped (OS-specific)
   ///
   static final tabCharEscaped = escapeChar + tabChar;
 
@@ -75,9 +75,9 @@ class ShellCmd {
   ///
   static final shellEnvKey = (isWindows ? 'COMSPEC' : 'SHELL');
 
-  /// Const: temporary folder prefix
+  /// Const: temporary script name as well as temporary dir prefix
   ///
-  static const tempScriptPrefix = 'shell_cmd';
+  static const tempScriptName = 'shell_cmd';
 
   /// Actual arguments
   ///
@@ -104,7 +104,7 @@ class ShellCmd {
   static ShellCmd fromParsed(String program, List<String> args) =>
       ShellCmd()..init(null, program, args);
 
-  /// Resets [program] and [args]
+  /// Resets instance properties
   ///
   void clear() {
     args.clear();
@@ -124,14 +124,14 @@ class ShellCmd {
   /// and returns that
   ///
   static Future<Directory> createTempDir() async =>
-      await Directory.systemTemp.createTemp(tempScriptPrefix);
+      await Directory.systemTemp.createTemp(tempScriptName);
 
   /// Under POSIX-compliant OS, does nothing and returns null.\
   /// Under Windows, creates a temporary directory (blocking)
   /// and returns that
   ///
   static Directory createTempDirSync() =>
-      Directory.systemTemp.createTempSync(tempScriptPrefix);
+      Directory.systemTemp.createTempSync(tempScriptName);
 
   /// Under POSIX-compliant OS, does nothing and returns an empty string.\
   /// Under Windows, creates a temporary folder (non-blocking) and writes
@@ -362,8 +362,8 @@ class ShellCmd {
     return shell;
   }
 
-  /// Split an arbitrary command into separate unquoted tokens
-  /// and move the first one to [program] if required.
+  /// Split an arbitrary command into separate unquoted tokens,
+  /// move the first one to [program] and set [source].
   ///
   /// This method is a substantial rework of `shellSplit()` from
   /// the `io` package, as the latter is POSIX-specific and fails
@@ -560,7 +560,7 @@ class ShellCmd {
   }
 
   /// Opposite to split: convert [program] and [args] into a single string
-  /// with escaped components and assign that to [source]
+  /// with the escaped components and assign that to [source]
   ///
   String toSource() {
     _setSource();
@@ -628,7 +628,7 @@ class ShellCmd {
   /// Returns temporary script filename
   ///
   static String _getScriptName() =>
-      (isWindows ? '$tempScriptPrefix.bat' : tempScriptPrefix);
+      (isWindows ? '$tempScriptName.bat' : tempScriptName);
 
   /// Non-blocking wrapper to call [__prepareRun] and to create temp
   /// script if needed.
@@ -718,7 +718,7 @@ class ShellCmd {
   }
 
   /// Set [source] from [program] and [args] if it wasn't available
-  /// while being constructed via [init].
+  /// while being parsed.
   ///
   void _setSource([String? newSource]) {
     if ((newSource != null) && newSource.isNotEmpty) {
@@ -738,14 +738,14 @@ class ShellCmd {
     source = result.toString();
   }
 
-  /// Converts command to script
+  /// Converts command to a content of a script:/ for POSIХ-compliant OS
+  /// returns command as is, for Windows, returns a simple wrapper.
   ///
   static String _toScript(String command) {
     if (command.isEmpty || !isWindows) {
       return command;
     }
 
-    final n = lineBreak;
-    return '@echo off$n$command${n}exit /B %errorlevel%$n';
+    return '@$command$lineBreak@exit /B %errorlevel%$lineBreak';
   }
 }
