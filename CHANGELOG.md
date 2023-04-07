@@ -1,3 +1,8 @@
+## 0.2.2
+
+- Breaking: renamed `source` to `text` and `setSource` to `setText`.
+- Added another `runSync` test.
+
 ## 0.2.1
 
 - Refactored `tempScriptPrefix` into `tempScriptName`.

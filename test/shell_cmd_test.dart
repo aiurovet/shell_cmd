@@ -53,33 +53,33 @@ void main() {
       final cmd = ShellCmd('abc de f');
       final shell = ShellCmd.defaultShell;
       cmd.copyFrom(shell);
-      expect([cmd.source, cmd.program, cmd.args],
-          [shell.source, shell.program, shell.args]);
+      expect([cmd.text, cmd.program, cmd.args],
+          [shell.text, shell.program, shell.args]);
     });
-    test('with source', () {
+    test('with text', () {
       final cmd = ShellCmd('abc de f');
       final shell = ShellCmd.defaultShell;
-      cmd.copyFrom(shell, source: 'xyz');
-      expect([cmd.source, cmd.program, cmd.args],
+      cmd.copyFrom(shell, text: 'xyz');
+      expect([cmd.text, cmd.program, cmd.args],
           ['xyz', shell.program, shell.args]);
     });
     test('with program', () {
       final cmd = ShellCmd('abc de f');
       final shell = ShellCmd.defaultShell;
       cmd.copyFrom(shell, program: 'xyz');
-      expect([cmd.source, cmd.program, cmd.args],
-          [shell.source, 'xyz', shell.args]);
+      expect([cmd.text, cmd.program, cmd.args],
+          [shell.text, 'xyz', shell.args]);
     });
     test('with args', () {
       final cmd = ShellCmd('abc de f');
       final shell = ShellCmd.defaultShell;
       cmd.copyFrom(shell, args: ['x', 'yz']);
       expect([
-        cmd.source,
+        cmd.text,
         cmd.program,
         cmd.args
       ], [
-        shell.source,
+        shell.text,
         shell.program,
         ['x', 'yz']
       ]);
@@ -359,6 +359,10 @@ void main() {
     test('echo', () async {
       final r = await ShellCmd('echo Abc$e def').run(runInShell: isWindows);
       expect(r.stdout.toString(), 'Abc def$n');
+    });
+    test('echo with a space (in-shell, sync)', () {
+      final r = ShellCmd('echo "1 2"').runSync(runInShell: true);
+      expect(r.stdout.toString(), '1 2$n');
     });
     test('dart --version', () async {
       final r = await ShellCmd(r'dart --version').run();

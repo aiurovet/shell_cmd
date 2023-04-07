@@ -19,7 +19,7 @@ class ShellCmd {
   ///
   static final defaultShell = ShellCmd(defaultShellCommand);
 
-  /// Default shell executable and its args as a single string (source)
+  /// Default shell executable and its args as a single string [text]
   ///
   static final defaultShellCommand = (isWindows ? 'cmd.exe /c' : 'sh -c');
 
@@ -91,9 +91,9 @@ class ShellCmd {
   ///
   var runInShell = false;
 
-  /// Source command string
+  /// Command text
   ///
-  var source = '';
+  var text = '';
 
   /// Default constructor
   ///
@@ -110,14 +110,14 @@ class ShellCmd {
     args.clear();
     program = '';
     runInShell = false;
-    source = '';
+    text = '';
   }
 
   /// Copy constructor
   ///
   void copyFrom(ShellCmd that,
-          {String? source, String? program, List<String>? args}) =>
-      init(source ?? that.source, program ?? that.program, args ?? that.args);
+          {String? text, String? program, List<String>? args}) =>
+      init(text ?? that.text, program ?? that.program, args ?? that.args);
 
   /// Under POSIX-compliant OS, does nothing and returns null.\
   /// Under Windows, creates a temporary directory (non-blocking)
@@ -259,7 +259,7 @@ class ShellCmd {
 
   /// Copy constructor
   ///
-  void init([String? newSource, String? newProgram, List<String>? newArgs]) {
+  void init([String? newText, String? newProgram, List<String>? newArgs]) {
     program = newProgram ?? '';
     args.clear();
 
@@ -267,7 +267,7 @@ class ShellCmd {
       args.addAll(newArgs);
     }
 
-    _setSource(newSource);
+    setText(newText);
   }
 
   /// Copy from the default shell
@@ -325,7 +325,7 @@ class ShellCmd {
     var tempScriptPath = _prepareRunSync(command, runInShell);
 
     if (isWindows && runInShell) {
-      tempScriptPath = createTempScriptSync(source);
+      tempScriptPath = createTempScriptSync(text);
       command = tempScriptPath;
     }
 
@@ -363,7 +363,7 @@ class ShellCmd {
   }
 
   /// Split an arbitrary command into separate unquoted tokens,
-  /// move the first one to [program] and set [source].
+  /// move the first one to [program] and set [text].
   ///
   /// This method is a substantial rework of `shellSplit()` from
   /// the `io` package, as the latter is POSIX-specific and fails
@@ -374,19 +374,19 @@ class ShellCmd {
   ///
   /// Populates instance members of 'this' and return is it
   ///
-  void parse([String? source]) {
+  void parse([String? text]) {
     clear();
 
-    if ((source != null) && source.isNotEmpty) {
+    if ((text != null) && text.isNotEmpty) {
       // Should not trim command from the right, as there might happen
       // trailing escaped space
       //
-      this.source = source.trimLeft();
+      this.text = text.trimLeft();
     }
 
     // If command is empty, just leave
     //
-    if (this.source.isEmpty) {
+    if (this.text.isEmpty) {
       return;
     }
 
@@ -397,7 +397,7 @@ class ShellCmd {
     var prev = 0; // previous char code from comman
     var quoteLevel = 0; // 1 = single-quoted, 2 = double-quoted
     var quoteStart = -1; // position of the outer left quote character
-    final scanner = StringScanner(this.source);
+    final scanner = StringScanner(this.text);
     final token = StringBuffer(); // buffer for the current arg
 
     while (!scanner.isDone) {
@@ -559,18 +559,33 @@ class ShellCmd {
     return;
   }
 
-  /// Opposite to split: convert [program] and [args] into a single string
-  /// with the escaped components and assign that to [source]
+  /// Set [text] to the argument [newText]. If the latter is null,
+  /// then merge [program] and [args] to [text].
   ///
-  String toSource() {
-    _setSource();
-    return source;
+  String setText([String? newText]) {
+    if ((newText != null) && newText.isNotEmpty) {
+      text = newText;
+      return text;
+    }
+
+    var result = StringBuffer(escape(program));
+
+    for (var i = 0, n = args.length; i < n; i++) {
+      if (result.isNotEmpty) {
+        result.write(spaceChar);
+      }
+      result.write(escape(args[i]));
+    }
+
+    text = result.toString();
+
+    return text;
   }
 
   /// Serializer
   ///
   @override
-  String toString() => source;
+  String toString() => text;
 
   /// Find full path by checking [fileName] in every directory of the PATH (non-blocking).\
   /// Returns [fileName] if [alwaysFound] is true, or an empty string otherwise.
@@ -639,7 +654,7 @@ class ShellCmd {
     var tempScriptPath = '';
 
     if (isWindows && runInShell) {
-      tempScriptPath = await createTempScript(source);
+      tempScriptPath = await createTempScript(text);
       command = tempScriptPath;
     }
 
@@ -657,7 +672,7 @@ class ShellCmd {
     var tempScriptPath = '';
 
     if (isWindows && runInShell) {
-      tempScriptPath = createTempScriptSync(source);
+      tempScriptPath = createTempScriptSync(text);
       command = tempScriptPath;
     }
 
@@ -671,22 +686,22 @@ class ShellCmd {
   /// [fileName] has no extension under Windows
   ///
   void __prepareRun(String? command, bool runInShell) {
-    final hasNewSource =
-        ((command != null) && command.isNotEmpty && (command != source));
+    final hasNewText =
+        ((command != null) && command.isNotEmpty && (command != text));
 
     setShell();
 
     if (!runInShell) {
-      if (hasNewSource) {
+      if (hasNewText) {
         parse(command);
       }
       return;
     }
 
-    final newSource = (hasNewSource ? command : source);
+    final newText = (hasNewText ? command : text);
     copyFrom(shell);
-    args.add(newSource);
-    _setSource();
+    args.add(newText);
+    setText();
   }
 
   /// Retrieves directory list from PATH variable and fills the list of
@@ -715,27 +730,6 @@ class ShellCmd {
     }
 
     return tit;
-  }
-
-  /// Set [source] from [program] and [args] if it wasn't available
-  /// while being parsed.
-  ///
-  void _setSource([String? newSource]) {
-    if ((newSource != null) && newSource.isNotEmpty) {
-      source = newSource;
-      return;
-    }
-
-    var result = StringBuffer(escape(program));
-
-    for (var i = 0, n = args.length; i < n; i++) {
-      if (result.isNotEmpty) {
-        result.write(spaceChar);
-      }
-      result.write(escape(args[i]));
-    }
-
-    source = result.toString();
   }
 
   /// Converts command to a content of a script:/ for POSIХ-compliant OS

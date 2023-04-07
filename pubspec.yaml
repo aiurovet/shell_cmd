@@ -1,6 +1,6 @@
 name: shell_cmd
 description: A library for running programs either explicitly or in shell
-version: 0.2.1
+version: 0.2.2
 repository: https://github.com/aiurovet/shell_cmd/
 
 environment:
