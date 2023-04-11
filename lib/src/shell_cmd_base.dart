@@ -11,15 +11,7 @@ import 'package:string_scanner/string_scanner.dart';
 /// Static API to split an arbitrary command and to execute that
 ///
 class ShellCmd {
-  /// Current shell executable filename or full path
-  ///
-  static final ShellCmd shell = ShellCmd();
-
-  /// Default shell executable and its args
-  ///
-  static final defaultShell = ShellCmd(defaultShellCommand);
-
-  /// Default shell executable and its args as a single string [text]
+  /// Default shell executable and its args as a single string ([text])
   ///
   static final defaultShellCommand = (isWindows ? 'cmd.exe /c' : 'sh -c');
 
@@ -91,6 +83,10 @@ class ShellCmd {
   ///
   var runInShell = false;
 
+  /// Current shell
+  ///
+  static var shell = ShellCmd()..copyFrom(_defaultShell);
+
   /// Command text
   ///
   var text = '';
@@ -98,6 +94,10 @@ class ShellCmd {
   /// Command text
   ///
   static var _isInitialized = false;
+
+  /// Default shell executable and its args
+  ///
+  static final _defaultShell = ShellCmd(defaultShellCommand);
 
   /// Default constructor
   ///
@@ -110,8 +110,9 @@ class ShellCmd {
     }
   }
 
-  static ShellCmd fromParsed(String program, List<String> args) =>
-      ShellCmd()..init(null, program, args);
+  static ShellCmd fromParsed(String program, List<String> args,
+          {String? text}) =>
+      ShellCmd()..init(text, program, args);
 
   /// Resets instance properties
   ///
@@ -282,8 +283,9 @@ class ShellCmd {
   /// Copy from the default shell
   ///
   static ShellCmd resetShell() {
-    final shellProg = Platform.environment[shellEnvKey] ?? defaultShell.program;
-    return shell..copyFrom(defaultShell, program: shellProg);
+    final shellProg =
+        Platform.environment[shellEnvKey] ?? _defaultShell.program;
+    return shell..copyFrom(_defaultShell, program: shellProg);
   }
 
   /// Split an arbitrary [command] and execute that in the non-blocking mode.

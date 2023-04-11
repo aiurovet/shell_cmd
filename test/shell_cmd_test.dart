@@ -51,28 +51,28 @@ void main() {
   group('copyFrom -', () {
     test('object only', () {
       final cmd = ShellCmd('abc de f');
-      final shell = ShellCmd.defaultShell;
+      final shell = ShellCmd.shell;
       cmd.copyFrom(shell);
       expect([cmd.text, cmd.program, cmd.args],
           [shell.text, shell.program, shell.args]);
     });
     test('with text', () {
       final cmd = ShellCmd('abc de f');
-      final shell = ShellCmd.defaultShell;
+      final shell = ShellCmd.shell;
       cmd.copyFrom(shell, text: 'xyz');
       expect([cmd.text, cmd.program, cmd.args],
           ['xyz', shell.program, shell.args]);
     });
     test('with program', () {
       final cmd = ShellCmd('abc de f');
-      final shell = ShellCmd.defaultShell;
+      final shell = ShellCmd.shell;
       cmd.copyFrom(shell, program: 'xyz');
       expect(
           [cmd.text, cmd.program, cmd.args], [shell.text, 'xyz', shell.args]);
     });
     test('with args', () {
       final cmd = ShellCmd('abc de f');
-      final shell = ShellCmd.defaultShell;
+      final shell = ShellCmd.shell;
       cmd.copyFrom(shell, args: ['x', 'yz']);
       expect([
         cmd.text,
@@ -384,8 +384,8 @@ void main() {
   });
   group('shell -', () {
     test('reset -', () {
-      final defArgs = ShellCmd.defaultShell.args;
-      final defProg = ShellCmd.defaultShell.program;
+      final defArgs = ShellCmd.shell.args;
+      final defProg = ShellCmd.shell.program;
       final expProg = env[ShellCmd.shellEnvKey] ?? defProg;
       final shell = ShellCmd.resetShell();
       expect([shell.program, shell.args], [expProg, defArgs]);
@@ -419,7 +419,7 @@ void main() {
     });
     test('set - default - was empty, and not forced', () {
       final shell = ShellCmd.shell;
-      final expArgs = ShellCmd.defaultShell.args;
+      final expArgs = ShellCmd.shell.args;
       shell.clear();
       ShellCmd.setShell(force: false);
 
@@ -435,7 +435,7 @@ void main() {
     });
     test('set - default - was not empty, and forced', () {
       final shell = ShellCmd.shell;
-      final expArgs = ShellCmd.defaultShell.args;
+      final expArgs = ShellCmd.shell.args;
       shell.program = 'xyz';
       shell.args.clear();
       ShellCmd.setShell(force: true);

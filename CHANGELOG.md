@@ -1,3 +1,7 @@
+## 0.2.4
+
+- Bugfix: `shell` must be variable, and `defaultShell` should be private
+
 ## 0.2.3
 
 - Bugfix: `shell` must be initialised automatically
