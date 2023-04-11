@@ -95,10 +95,19 @@ class ShellCmd {
   ///
   var text = '';
 
+  /// Command text
+  ///
+  static var _isInitialized = false;
+
   /// Default constructor
   ///
   ShellCmd([String? command]) {
     parse(command);
+
+    if (!_isInitialized) {
+      _isInitialized = true;
+      resetShell();
+    }
   }
 
   static ShellCmd fromParsed(String program, List<String> args) =>
@@ -273,7 +282,7 @@ class ShellCmd {
   /// Copy from the default shell
   ///
   static ShellCmd resetShell() {
-    final shellProg = Platform.environment[shellEnvKey] ?? '';
+    final shellProg = Platform.environment[shellEnvKey] ?? defaultShell.program;
     return shell..copyFrom(defaultShell, program: shellProg);
   }
 
@@ -285,7 +294,6 @@ class ShellCmd {
       Map<String, String>? environment,
       bool includeParentEnvironment = true,
       bool? runInShell,
-      List<String>? shellArgs,
       Encoding? stdoutEncoding = systemEncoding,
       Encoding? stderrEncoding = systemEncoding}) async {
     runInShell ??= this.runInShell;
@@ -318,7 +326,6 @@ class ShellCmd {
       Map<String, String>? environment,
       bool includeParentEnvironment = true,
       bool? runInShell,
-      List<String>? shellArgs,
       Encoding? stdoutEncoding = systemEncoding,
       Encoding? stderrEncoding = systemEncoding}) {
     runInShell ??= this.runInShell;

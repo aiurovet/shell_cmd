@@ -1,3 +1,9 @@
+## 0.2.3
+
+- Bugfix: `shell` must be initialised automatically
+- Bugfix: if SHELL/COMSPEC is undefined, `shell` should be a copy of `defaultShell`
+- Removed unused `shellArgs` from `run` and `runSync`
+
 ## 0.2.2
 
 - Breaking: renamed `source` to `text` and `setSource` to `setText`.
