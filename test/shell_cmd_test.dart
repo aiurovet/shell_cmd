@@ -67,8 +67,8 @@ void main() {
       final cmd = ShellCmd('abc de f');
       final shell = ShellCmd.defaultShell;
       cmd.copyFrom(shell, program: 'xyz');
-      expect([cmd.text, cmd.program, cmd.args],
-          [shell.text, 'xyz', shell.args]);
+      expect(
+          [cmd.text, cmd.program, cmd.args], [shell.text, 'xyz', shell.args]);
     });
     test('with args', () {
       final cmd = ShellCmd('abc de f');
