@@ -1,3 +1,7 @@
+## 0.2.5
+
+- Website changed
+
 ## 0.2.4
 
 - Bugfix: `shell` must be variable, and `defaultShell` should be private
